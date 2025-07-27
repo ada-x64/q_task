@@ -1,0 +1,104 @@
+on:
+  push:
+    tags:
+      - "*"
+
+name: Publish
+
+jobs:
+  build_and_test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install Dependencies
+        run: sudo apt-get update; sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: taiki-e/install-action@nextest
+
+      - name: Generate code coverage
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{SECRETS.CODECOV_TOKEN}}
+          files: lcov.info
+          fail_ci_if_error: true
+          slug: ada-x64/q_service
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  crates_io_publish:
+    name: Publish (crates.io)
+    needs:
+      - build_and_test
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo-release cache restore
+        id: cargo_release_cache_restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cargo/bin/cargo-release
+          key: ${{ runner.os }}-cargo-release
+
+      - run: cargo install cargo-release
+        if: steps.cargo_release_cache_restore.outputs.cache-hit != 'true'
+
+      - name: cargo-release cache save
+        id: cargo_release_cache_save
+        uses: actions/cache/save@v4
+        if: always() && steps.cargo_release_cache_restore.outputs.cache-hit != 'true'
+        with:
+          path: ~/.cargo/bin/cargo-release
+          key: ${{ runner.os }}-cargo-release
+
+      - name: cargo login
+        run: |-
+          echo "${{ secrets.CRATES_IO_API_TOKEN }}" | cargo login
+
+      # allow-branch HEAD is because GitHub actions switches
+      # to the tag while building, which is a detached head
+      - name: "publish main crate"
+        run: |-
+          cargo release \
+            publish \
+            --all-features \
+            --allow-branch HEAD \
+            --no-confirm \
+            --no-verify \
+            --execute

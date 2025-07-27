@@ -1,5 +1,8 @@
 [package]
 name = "q_tasks"
+description = "Microscoping task polling for Bevy."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ada-x64/q_task"
 version = "0.1.0"
 authors = ["<phoenix.mandala@pm.me>"]
 edition = "2024"

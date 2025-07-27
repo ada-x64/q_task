@@ -1,12 +1,19 @@
+#![doc = include_str!("../README.md")]
+#![warn(missing_docs)]
+
+#[cfg(feature = "plugin")]
 use bevy_app::prelude::*;
 use bevy_ecs::prelude::*;
 pub use bevy_ecs::world::{CommandQueue, World};
 use bevy_tasks::{Task, futures_lite::future, prelude::*};
 
+/// Used to keep a task alive.
+/// The [task!] macro will automatically spawn and free an entity with this component in order to track active tasks.
 #[derive(Component)]
 pub struct TaskComponent(pub Task<CommandQueue>);
 
-fn poll_tasks(mut commands: Commands, tasks: Query<&mut TaskComponent>) {
+/// Poll tasks. If using the plugin, this happens on PreUpdate.
+pub fn poll_tasks(mut commands: Commands, tasks: Query<&mut TaskComponent>) {
     for mut task in tasks {
         if let Some(mut q) = block_on(future::poll_once(&mut task.0)) {
             commands.append(&mut q);
@@ -71,10 +78,13 @@ macro_rules! task {
     }
 }
 
+/// Exposes the crate's funtionality. In particular, runs [poll_tasks] on PreUpdate.
+#[cfg(feature = "plugin")]
 pub struct TaskPlugin;
+#[cfg(feature = "plugin")]
 impl Plugin for TaskPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, poll_tasks);
+        app.add_systems(PreUpdate, poll_tasks);
     }
 }
 
