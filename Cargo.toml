@@ -1,0 +1,11 @@
+[package]
+name = "q_tasks"
+version = "0.1.0"
+publish = false
+authors = ["<phoenix.mandala@pm.me>"]
+edition = "2024"
+
+[dependencies]
+bevy_ecs = "0.16"
+itertools = "0.14"
+thiserror = "2.0.12"
